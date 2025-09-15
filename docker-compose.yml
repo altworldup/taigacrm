@@ -38,7 +38,7 @@ x-volumes:
 
 services:
   taiga-db:
-    image: postgres:16.9
+    image: postgres:12.3
     environment:
       POSTGRES_DB: "taiga"
       POSTGRES_USER: "${POSTGRES_USER}"
