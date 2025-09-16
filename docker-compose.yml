@@ -3,9 +3,9 @@ version: "3.9"
 networks:
   traefik:
     external: true
-    name: dokploy-network   # <-- réseau Traefik existant
+    name: dokploy-network   # <-- réseau Traefik existant (overlay swarm)
   taiga:
-    driver: bridge
+    driver: overlay         # <-- pour swarm, utilise overlay au lieu de bridge
 
 volumes:
   taiga-static-data:
@@ -15,7 +15,6 @@ volumes:
   taiga-events-rabbitmq-data:
 
 services:
-  # PostgreSQL
   taiga-db:
     image: postgres:16.9
     environment:
@@ -27,7 +26,6 @@ services:
     networks:
       - taiga
 
-  # RabbitMQ async
   taiga-async-rabbitmq:
     image: rabbitmq:3.8-management-alpine
     environment:
@@ -40,7 +38,6 @@ services:
     networks:
       - taiga
 
-  # RabbitMQ events
   taiga-events-rabbitmq:
     image: rabbitmq:3.8-management-alpine
     environment:
@@ -53,7 +50,6 @@ services:
     networks:
       - taiga
 
-  # Taiga back
   taiga-back:
     image: taigaio/taiga-back:latest
     env_file: .env
@@ -67,13 +63,13 @@ services:
       - taiga-db
       - taiga-async-rabbitmq
       - taiga-events-rabbitmq
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.taiga-back.rule=Host(\"crm.appliway.com\") && PathPrefix(\"/api\")"
-      - "traefik.http.routers.taiga-back.entrypoints=websecure"
-      - "traefik.http.routers.taiga-back.tls.certresolver=letsencrypt"
+    deploy:
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.taiga-back.rule=Host(`crm.appliway.com`) && PathPrefix(`/api`)"
+        - "traefik.http.routers.taiga-back.entrypoints=websecure"
+        - "traefik.http.routers.taiga-back.tls.certresolver=letsencrypt"
 
-  # Taiga async
   taiga-async:
     image: taigaio/taiga-back:latest
     entrypoint: ["/taiga-back/docker/async_entrypoint.sh"]
@@ -84,7 +80,6 @@ services:
     networks:
       - taiga
 
-  # Taiga front
   taiga-front:
     image: taigaio/taiga-front:latest
     env_file: .env
@@ -93,20 +88,19 @@ services:
       - traefik
     depends_on:
       - taiga-back
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.taiga-front.rule=Host(\"crm.appliway.com\")"
-      - "traefik.http.routers.taiga-front.entrypoints=websecure"
-      - "traefik.http.routers.taiga-front.tls.certresolver=letsencrypt"
+    deploy:
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.taiga-front.rule=Host(`crm.appliway.com`)"
+        - "traefik.http.routers.taiga-front.entrypoints=websecure"
+        - "traefik.http.routers.taiga-front.tls.certresolver=letsencrypt"
 
-  # Taiga events
   taiga-events:
     image: taigaio/taiga-events:latest
     env_file: .env
     networks:
       - taiga
 
-  # Taiga protected
   taiga-protected:
     image: taigaio/taiga-protected:latest
     env_file: .env
