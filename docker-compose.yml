@@ -1,32 +1,113 @@
-# URLs
-TAIGA_SCHEME=https
-TAIGA_DOMAIN=crm.appliway.com
-SUBPATH=""
-WEBSOCKETS_SCHEME=wss
+version: "3.9"
 
-# Secret
-SECRET_KEY="taiga-secret-key-unique"
+networks:
+  traefik:
+    external: true   # utilise le réseau Traefik existant
+  taiga:
+    driver: bridge   # réseau interne pour les services Taiga
 
-# PostgreSQL
-POSTGRES_USER=taiga
-POSTGRES_PASSWORD=taiga
+volumes:
+  taiga-static-data:
+  taiga-media-data:
+  taiga-db-data:
+  taiga-async-rabbitmq-data:
+  taiga-events-rabbitmq-data:
 
-# Email
-EMAIL_BACKEND=smtp
-EMAIL_HOST=smtp.hostinger.com
-EMAIL_PORT=587
-EMAIL_HOST_USER=teamproject@almightytechnology.pro
-EMAIL_HOST_PASSWORD=c7#9Y~KJlXF
-EMAIL_DEFAULT_FROM=teamproject@almightytechnology.pro
-EMAIL_USE_TLS=True
-EMAIL_USE_SSL=False
+services:
+  # PostgreSQL
+  taiga-db:
+    image: postgres:16.9
+    environment:
+      POSTGRES_DB: taiga
+      POSTGRES_USER: "${POSTGRES_USER}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+    volumes:
+      - taiga-db-data:/var/lib/postgresql/data
+    networks:
+      - taiga
 
-# RabbitMQ
-RABBITMQ_USER=taiga
-RABBITMQ_PASS=taiga
-RABBITMQ_VHOST=taiga
-RABBITMQ_ERLANG_COOKIE=secret-erlang-cookie
+  # RabbitMQ async
+  taiga-async-rabbitmq:
+    image: rabbitmq:3.8-management-alpine
+    environment:
+      RABBITMQ_ERLANG_COOKIE: "${RABBITMQ_ERLANG_COOKIE}"
+      RABBITMQ_DEFAULT_USER: "${RABBITMQ_USER}"
+      RABBITMQ_DEFAULT_PASS: "${RABBITMQ_PASS}"
+      RABBITMQ_DEFAULT_VHOST: "${RABBITMQ_VHOST}"
+    volumes:
+      - taiga-async-rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - taiga
 
-# Attachments
-ATTACHMENTS_MAX_AGE=360
-ENABLE_TELEMETRY=True
+  # RabbitMQ events
+  taiga-events-rabbitmq:
+    image: rabbitmq:3.8-management-alpine
+    environment:
+      RABBITMQ_ERLANG_COOKIE: "${RABBITMQ_ERLANG_COOKIE}"
+      RABBITMQ_DEFAULT_USER: "${RABBITMQ_USER}"
+      RABBITMQ_DEFAULT_PASS: "${RABBITMQ_PASS}"
+      RABBITMQ_DEFAULT_VHOST: "${RABBITMQ_VHOST}"
+    volumes:
+      - taiga-events-rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - taiga
+
+  # Taiga back
+  taiga-back:
+    image: taigaio/taiga-back:latest
+    env_file: .env
+    volumes:
+      - taiga-static-data:/taiga-back/static
+      - taiga-media-data:/taiga-back/media
+    networks:
+      - taiga
+      - traefik
+    depends_on:
+      - taiga-db
+      - taiga-async-rabbitmq
+      - taiga-events-rabbitmq
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.taiga-back.rule=Host(\"crm.appliway.com\") && PathPrefix(\"/api\")"
+      - "traefik.http.routers.taiga-back.entrypoints=websecure"
+      - "traefik.http.routers.taiga-back.tls.certresolver=letsencrypt"
+
+  # Taiga async
+  taiga-async:
+    image: taigaio/taiga-back:latest
+    entrypoint: ["/taiga-back/docker/async_entrypoint.sh"]
+    env_file: .env
+    volumes:
+      - taiga-static-data:/taiga-back/static
+      - taiga-media-data:/taiga-back/media
+    networks:
+      - taiga
+
+  # Taiga front
+  taiga-front:
+    image: taigaio/taiga-front:latest
+    env_file: .env
+    networks:
+      - taiga
+      - traefik
+    depends_on:
+      - taiga-back
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.taiga-front.rule=Host(\"crm.appliway.com\")"
+      - "traefik.http.routers.taiga-front.entrypoints=websecure"
+      - "traefik.http.routers.taiga-front.tls.certresolver=letsencrypt"
+
+  # Taiga events
+  taiga-events:
+    image: taigaio/taiga-events:latest
+    env_file: .env
+    networks:
+      - taiga
+
+  # Taiga protected
+  taiga-protected:
+    image: taigaio/taiga-protected:latest
+    env_file: .env
+    networks:
+      - taiga
