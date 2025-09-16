@@ -156,5 +156,5 @@ volumes:
 
 networks:
   taiga:
-    name: "dokploy-network-name" # Remplacez par le nom de votre réseau Dokploy
+    name: "dokploy-network" # Remplacez par le nom de votre réseau Dokploy
     external: true
