@@ -62,7 +62,7 @@ services:
       - taiga-media-data:/taiga-back/media
     networks:
       - taiga
-      - traefik
+      - dokploy-network
     depends_on:
       - taiga-db
       - taiga-async-rabbitmq
@@ -90,7 +90,7 @@ services:
     env_file: .env
     networks:
       - taiga
-      - traefik
+      - dokploy-network
     depends_on:
       - taiga-back
     labels:
