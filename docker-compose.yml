@@ -2,9 +2,10 @@ version: "3.9"
 
 networks:
   traefik:
-    external: true   # utilise le réseau Traefik existant
+    external: true
+    name: dokploy-network   # <-- réseau Traefik existant
   taiga:
-    driver: bridge   # réseau interne pour les services Taiga
+    driver: bridge
 
 volumes:
   taiga-static-data:
